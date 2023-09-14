@@ -1,0 +1,4 @@
+fastavro
+requests
+pyyaml
+confluent_kafka
