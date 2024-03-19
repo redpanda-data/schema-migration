@@ -48,14 +48,61 @@ logging.info('Connected to brokers: ' + config["importer"]["target"]["bootstrap.
 input_file = config["schemas"]
 topic = config["importer"]["options"]["topic"]
 
-count = 0
-with open(input_file) as f:
-    for line in f:
-        record = json.loads(line)
-        count = count + 1
-        k = json.dumps(record.get('key')).encode('utf-8')
-        v = json.dumps(record.get('value')).encode('utf-8')
-        producer.produce(topic=topic, key=k, value=v)
+if config["importer"]["options"]["export_is_rpk"]:
+
+    def on_delivery(expected_offset):
+
+        def impl(err, msg):
+            # Neither message payloads must not affect the error string.
+            if err is not None:
+                logging.error(
+                    f'Failed at expected_offset: {expected_offset} error: {err}'
+                )
+            if msg.offset() != expected_offset:
+                logging.error(
+                    f'Failed at expected_offset: {expected_offset} msg.offset: {msg.offset()}'
+                )
+
+        return impl
+
+    count = 0
+    with open(input_file) as f:
+        records = json.load(f)
+        for record in records:
+            k = json.loads(record.get('key'))
+            logging.debug(f'key: {k}')
+            v = record.get('value')
+            offset = record["offset"]
+
+            if v is not None:
+                v = json.loads(v)
+
+            while record['offset'] > count:
+                logging.debug(
+                    f'Adding NOOP at count: {count}, offset: {record["offset"]}, seq: {k.get("seq")}'
+                )
+                ret = producer.produce(topic=topic,
+                                       key=json.dumps({'keytype': 'NOOP'}))
+                count = count + 1
+
+            k = json.dumps(k, separators=(',', ':')).encode('utf-8')
+            if v is not None:
+                v = json.dumps(v, separators=(',', ':')).encode('utf-8')
+            producer.produce(topic=topic,
+                             key=k,
+                             value=v,
+                             on_delivery=on_delivery(offset))
+            count = count + 1
+
+else:
+    count = 0
+    with open(input_file) as f:
+        for line in f:
+            record = json.loads(line)
+            count = count + 1
+            k = json.dumps(record.get('key')).encode('utf-8')
+            v = json.dumps(record.get('value')).encode('utf-8')
+            producer.produce(topic=topic, key=k, value=v)
 
 logging.info('Wrote ' + str(count) + ' messages into ' + topic)
 producer.flush()
