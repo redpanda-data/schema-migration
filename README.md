@@ -1,120 +1,34 @@
-# Schema Migration Tool
+# Schema Migration
 
-This tool helps migrate schemas from one Schema Registry instance to another. It exports schemas from a source registry by reading them through the REST API.
-It imports schemas into a target instance by writing the schemas as messages to the \_schemas topic. This process ensures we have direct control of the version numbers and schema IDs.
+This repo contains two sub-projects related to schema migration: REST Exporter and Connect Transform. Since they each work in different ways, they offer unique advantages and disadvantages: use whichever suits your circumstances.
 
-# Dependencies
+---
 
-This tool has the following dependencies:
+# Projects
 
-### Linux
-- Python 3.9: `apt install python3`
+## [- Rest Exporter](./batch)
 
-### Python Libraries
-- fastavro: `pip3 install fastavro`
-- requests: `pip3 install requests`
-- pyyaml: `pip3 install pyyaml`
-- confluent_kafka: `pip3 install confluent_kafka`
+This Python project provides a batch import/export capability of subjects. There are two tools available:
 
-# Schema Export
+- **exporter**: this reads schemas from a Schema Registry REST endpoint and writes them to a local file
+- **importer**: this reads schemas from a local file and writes them to a `_schemas` topic on a target Redpanda cluster
 
-`exporter.py` connects to the source Schema Registry instance and uses the REST API to extract all schemas and subjects.
-These are written out to an intermediate file, allowing the schemas to be stored in version control, transferred
-remotely, etc.
+## [- Connect Transform](./streaming)
 
-###  Usage:
-```shell
-usage: python3 exporter.py --config conf/config.yaml
-```
+This Java project contains a Kafka Connect Single Message Transform (SMT) that can enables the use of MirrorMaker 2 for continuous, real-time migration of schemas between clusters.
 
-### Configuration
+---
 
-`exporter.py` uses YAML for configuration - examples are available in the `conf/` directory.
+# How to choose?
 
-An example config is below:
+- If you only have visibility of the REST endpoint for Schema Registry, and not the underlying `_schemas` topic, the REST exporter is the only available choice. 
 
-```yaml
-exporter:
-  source:
-    url: https://localhost:8081/ # Mandatory
-    ssl.key.location: client.key
-    ssl.certificate.location: client.cert
-    ssl.ca.location: ca.cert
-  options:
-    exclude.deleted.versions: false # Mandatory
-    exclude.deleted.subjects: false # Mandatory
-    logfile: export.log # Mandatory
+- If you have visibility of the `_schemas` topic on the source cluster, then either the REST exporter or MirrorMaker 2 (with the transform) can be considered.
 
-schemas: exported-schemas.txt # Mandatory
-```
+The use of MirrorMaker 2 means a more complex deployment, but the advantages of being both realtime and continuous are obvious.
 
-Under `source:`, the URL of the schema registry is mandatory. The SSL parameters can be removed when connecting to an insecure Schema Registry
-instance.
+# Caveats
 
-By default, `exporter.py` will extract all subjects and versions, *including* those which have been *soft-deleted*.
-Soft-deleted items can be excluded by setting the appropriate option.
+Both approaches provide a unidirectional replication capability. If the target cluster is usable, there is a risk that new subjects / schemas are created, resulting in a schema ID clash.
 
-**Hard-deleted schema versions and subjects are permanently removed by Schema Registry. The migration tool can not
-retrieve these.**
-
-The `schemas:` configuration defines the local file where the exported schemas will be stored. This configuration is also used by 
-`importer.py`.
-
-# Schema Import
-
-`importer.py` reads messages from the intermediate file and writes them to the specified schemas topic on the target Redpanda
-cluster. These messages are then read by Schema Registry and made available via REST.
-
-### Usage
-
-```shell
-usage: python3 importer.py --config conf/config.yaml
-```
-
-### Configuration
-
-`importer.py` uses YAML for configuration - examples are available in the `conf/` directory.
-
-An example config is below:
-
-```yaml
-schemas: exported-schemas.txt # Mandatory
-
-importer:
-  target:
-    bootstrap.servers: localhost:9092 # Mandatory
-    security.protocol: SASL_SSL
-    sasl.mechanism: SCRAM-SHA-256
-    sasl.username: username
-    sasl.password: password
-  options:
-    topic: _schemas # Mandatory
-    logfile: import.log # Mandatory
-```
-
-As with `exporter.py`, the input file (containing schemas to import) is specified using the `schemas:` property and is
-mandatory.
-
-The Kafka producer configuration uses a minimum of `bootstrap_servers` in order to connect. For secure Redpanda
-clusters, the remaining security properties are also necessary.
-
-#### Producer Configuration
-
-The importer writes using a Producer
-
-
-# Considerations
-
-## Idempotency
-
-From limited testing, it appears that Redpanda Schema Registry will accept duplicate messages without issue, so running the migration
-import tool multiple times should work.
-
-## Migration Process
-
-Once a Schema Registry instance begins becomes active and begins to assign new schema IDs for itself, further migrations would be inadvisable.
-
-If further export / import processes are performed, there is a risk that the import would write a schema with an ID that
-has already been used on the target registry. If there is an ID clash, existing message data may become unreadable.
-
-You have been warned!
+This should be avoided while replication is ongoing.
