@@ -49,7 +49,7 @@ schemas: exported-schemas.txt # Mandatory
 ```
 
 Under `source:`, the URL of the schema registry is mandatory. The SSL parameters can be removed when connecting to an insecure Schema Registry
-instance.
+instance. If you utilize basic auth, you can add `basic.auth.user.info` under source with the user and password values. i.e. `basic.auth.user.info: "<user>:<password>"`
 
 By default, `exporter.py` will extract all subjects and versions, *including* those which have been *soft-deleted*.
 Soft-deleted items can be excluded by setting the appropriate option.
