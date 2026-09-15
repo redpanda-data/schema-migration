@@ -39,7 +39,7 @@ The example below shows how the transform can be deployed alongside a MirrorMake
   "replication.factor": "1",
   "source.cluster.alias": "source",
   "replication.policy.class": "org.apache.kafka.connect.mirror.IdentityReplicationPolicy",
-  "source.cluster.bootstrap.servers": "seed-fa015309.certnoj7m575jtvbg730.fmc.prd.cloud.redpanda.com:9092",
+  "source.cluster.bootstrap.servers": "broker-1.example.com:9092",
   "source.cluster.sasl.mechanism": "SCRAM-SHA-256",
   "source.cluster.sasl.jaas.config": "org.apache.kafka.common.security.scram.ScramLoginModule required username='pmw' password='redacted';",
   "source.cluster.security.protocol": "SASL_SSL",
